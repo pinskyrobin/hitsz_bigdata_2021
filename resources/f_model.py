@@ -57,7 +57,7 @@ class Model:
         self.df_predict = pd.DataFrame(index=df_test.index)
         df_train = (df_train - df_train.min()) / (df_train.max() - df_train.min())
 
-        df_train.var().to_csv("var.csv")
+        df_train.var().to_csv("clf_var.csv")
 
         self.X_train = df_train.values
         self.X_test = df_test.values
@@ -74,12 +74,13 @@ class Model:
     def predict(self):
         y_test_pred = self.classification_model.predict(self.X_test)
         self.df_predict['Predicted'] = y_test_pred
+        self.df_predict.to_csv("clf_predicted.csv")
         return self.df_predict
 
     # 缺省数据分析
     def __nan_analysis(self, df):
-        df.isna().sum().to_csv("nan_col.csv")
-        df.isna().sum(axis=1).to_csv("nan_row.csv")
+        df.isna().sum().to_csv("clf_nan_col.csv")
+        df.isna().sum(axis=1).to_csv("clf_nan_row.csv")
 
     # 删除缺省数据
     def __delete_nan(self, df):
@@ -103,7 +104,7 @@ class Model:
 
     # 对DataFrame数据进行相关性分析,采用kendall相关系数
     def __corr_analysis(self, df):
-        df.corr(method='kendall').to_csv("corr.csv")
+        df.corr(method='kendall').to_csv("clf_corr.csv")
 
 
 # 以下部分请勿改动！

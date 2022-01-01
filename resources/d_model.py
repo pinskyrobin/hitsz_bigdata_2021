@@ -2,9 +2,8 @@
 # 为方便测试，请统一使用 numpy、pandas、sklearn 三种包，如果实在有特殊需求，请单独跟助教沟通
 import numpy as np
 import pandas as pd
-from sklearn.impute import SimpleImputer
-from sklearn.linear_model import SGDRegressor
 from sklearn.metrics import mean_squared_error
+from sklearn import ensemble
 import argparse
 
 # 设定随机数种子，保证代码结果可复现
@@ -18,16 +17,32 @@ class Model:
         2. 需要有self.X_train、self.y_train、self.X_test三个实例变量，请注意大小写
         3. 如果划分出验证集，请将实例变量命名为self.X_valid、self.y_valid
     """
+
     # 模型初始化，数据预处理，仅为示例
     def __init__(self, train_path, test_path):
         df_train = pd.read_csv(train_path, encoding='gbk', index_col='id')
         df_test = pd.read_csv(test_path, encoding='gbk', index_col='id')
-        data_preprocessing = SimpleImputer(strategy='mean')
-        self.X_train = data_preprocessing.fit_transform(df_train['*天门冬氨酸氨基转换酶'].values.reshape(-1, 1))
         self.y_train = df_train['血糖'].values
-        self.X_test = data_preprocessing.transform(df_test['*天门冬氨酸氨基转换酶'].values.reshape(-1, 1))
-        # https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.SGDRegressor.html
-        self.regression_model = SGDRegressor()
+
+        self.__data_preprocess(df_train)
+        self.__data_preprocess(df_test)
+
+        self.__nan_analysis(df_train)
+        self.__corr_analysis(df_train)
+
+        df_train = self.__delete_nan(df_train)
+        # df_train = self.__fillna(df_train)
+
+        df_train = df_train.transform(lambda x: x.fillna(x.mean()))
+        df_test = df_test.transform(lambda x: x.fillna(x.mean()))
+        self.__drop_col(df_train, "血糖")
+        self.__drop_col(df_test, "血糖")
+
+        df_train = (df_train - df_train.min()) / (df_train.max() - df_train.min())
+
+        self.X_train = df_train.values
+        self.X_test = df_test.values
+        self.regression_model = ensemble.RandomForestRegressor(n_estimators=30)
         self.df_predict = pd.DataFrame(index=df_test.index)
 
     # 模型训练，输出训练集MSE
@@ -40,7 +55,65 @@ class Model:
     def predict(self):
         y_test_pred = self.regression_model.predict(self.X_test)
         self.df_predict['Predicted'] = y_test_pred
+        self.df_predict.to_csv("rgs_predicted.csv")
         return self.df_predict
+
+    def __data_preprocess(self, df):
+        gender_mapper = {'男': 1, '女': 0}
+        df['性别'] = df['性别'].map(gender_mapper)
+        df['体检日期'] = pd.to_datetime(df['体检日期'], format="%d/%m/%Y")
+        df['体检日期'] = pd.to_datetime('1/1/2018', format="%d/%m/%Y") - df['体检日期']
+        df['体检日期'] = df['体检日期'].dt.days
+
+        # 特征降维
+        col_list = ["血小板体积分布宽度", "单核细胞%", "乙肝表面抗原", "白球比例",
+                    "乙肝e抗体", "乙肝e抗原", "乙肝表面抗体", "乙肝核心抗体"]
+
+        for col_name in col_list:
+            self.__drop_col(df, col_name)
+
+    # 缺省数据分析
+    def __nan_analysis(self, df):
+        df.isna().sum().to_csv("rgs_nan_col.csv")
+        df.isna().sum(axis=1).to_csv("rgs_nan_row.csv")
+
+    # 删除缺省数据
+    def __delete_nan(self, df):
+        has_val_list = df.shape[1] - df.apply(lambda x: x.count(), axis=1).values
+
+        # 针对行数据的删除
+        delete_row_list = []
+        for i in range(len(has_val_list)):
+            if has_val_list[i] >= 15:
+                delete_row_list.append(i)
+
+        # 针对列数据的删除
+        df.drop(delete_row_list, axis=0, inplace=True)
+        self.y_train = np.delete(self.y_train, delete_row_list, axis=0)
+
+        # 删除过大的血糖数据,threshold=20
+        self.y_train = np.delete(self.y_train, df[df['血糖'] > 20].index.values, axis=0)
+        df = df.drop(df[df['血糖'] > 20].index)
+
+        return df
+
+    # 适用于DataFrame列的删除函数,封装了重复而必要的参数
+    def __drop_col(self, df, col_name):
+        df.drop(labels=col_name, axis=1, inplace=True)
+
+    # 对DataFrame数据进行相关性分析,采用kendall相关系数
+    def __corr_analysis(self, df):
+        df.corr(method='kendall').to_csv("rgs_corr.csv")
+
+    def __fillna(self, df):
+        pass
+        # bins = [3.9, 6.1, 8.2, 10]
+        # df['血糖范围'] = pd.cut(df['血糖'], bins, labels=False)
+        # # 按label分类,利用均值填补空值
+        # for index in df.columns.values:
+        #     df[index] = df.groupby("血糖范围").transform(lambda x: x.fillna(x.mean()))
+        # self.__drop_col(df, "血糖范围")
+        # return df
 
 
 # 以下部分请勿改动！
@@ -55,5 +128,6 @@ if __name__ == '__main__':
     print('训练集维度:{}\n测试集维度:{}'.format(model.X_train.shape, model.X_test.shape))
     MSE_train = model.train()
     print('MSE_train={:.6f}'.format(MSE_train))
+
     d_predict = model.predict()
     d_predict.to_csv('d_predict.csv')
