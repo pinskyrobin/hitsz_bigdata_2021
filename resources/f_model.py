@@ -5,6 +5,7 @@ import pandas as pd
 
 from sklearn.svm import SVC
 
+from sklearn.impute import SimpleImputer
 from sklearn.metrics import f1_score
 import argparse
 
@@ -43,26 +44,30 @@ class Model:
         df_train = self.__delete_nan(df_train)
 
         # 按label分类,利用均值填补空值
-        cnt = 0
-        for index, col in df_train.iteritems():
-            cnt += 1
-            if cnt >= df_train.shape[1]:
-                break
-            df_train[[index]] = df_train[[index, "label"]].groupby("label").transform(lambda x: x.fillna(x.mean()))
-            df_test[[index]] = df_test[[index]].transform(lambda x: x.fillna(x.mean()))
+        # cnt = 0
+        # for index, col in df_train.iteritems():
+        #     cnt += 1
+        #     if cnt >= df_train.shape[1]:
+        #         break
+        #     df_train[[index]] = df_train[[index, "label"]].groupby("label").transform(lambda x: x.fillna(x.mean()))
+        #     df_test[[index]] = df_test[[index]].transform(lambda x: x.fillna(x.mean()))
 
         self.__drop_col(df_train, "label")
         self.__drop_col(df_test, "label")
 
         self.df_predict = pd.DataFrame(index=df_test.index)
-        df_train = (df_train - df_train.min()) / (df_train.max() - df_train.min())
+        # df_train = (df_train - df_train.min()) / (df_train.max() - df_train.min())
+        #
+        # df_train.var().to_csv("clf_var.csv")
 
-        df_train.var().to_csv("clf_var.csv")
+        # self.X_train = df_train.values
+        # self.X_test = df_test.values
 
-        self.X_train = df_train.values
-        self.X_test = df_test.values
+        data_preprocessing = SimpleImputer(strategy='most_frequent')
+        self.X_train = data_preprocessing.fit_transform(df_train.values)
+        self.X_test = data_preprocessing.transform(df_test.values)
 
-        self.classification_model = SVC(C=1, kernel='poly', shrinking=True, decision_function_shape='ovo')
+        self.classification_model = SVC(C=1, kernel='linear', shrinking=True, decision_function_shape='ovo')
 
     # 模型训练，输出训练集f1_score
     def train(self):

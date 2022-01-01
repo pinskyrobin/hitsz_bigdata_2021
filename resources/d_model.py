@@ -2,6 +2,7 @@
 # 为方便测试，请统一使用 numpy、pandas、sklearn 三种包，如果实在有特殊需求，请单独跟助教沟通
 import numpy as np
 import pandas as pd
+from sklearn.impute import SimpleImputer
 from sklearn.metrics import mean_squared_error
 from sklearn import ensemble
 import argparse
@@ -31,18 +32,15 @@ class Model:
         self.__corr_analysis(df_train)
 
         df_train = self.__delete_nan(df_train)
-        # df_train = self.__fillna(df_train)
 
-        df_train = df_train.transform(lambda x: x.fillna(x.mean()))
-        df_test = df_test.transform(lambda x: x.fillna(x.mean()))
         self.__drop_col(df_train, "血糖")
         self.__drop_col(df_test, "血糖")
 
-        df_train = (df_train - df_train.min()) / (df_train.max() - df_train.min())
+        data_preprocessing = SimpleImputer(strategy='mean')
+        self.X_train = data_preprocessing.fit_transform(df_train.values)
+        self.X_test = data_preprocessing.transform(df_test.values)
 
-        self.X_train = df_train.values
-        self.X_test = df_test.values
-        self.regression_model = ensemble.RandomForestRegressor(n_estimators=30)
+        self.regression_model = ensemble.RandomForestRegressor(n_estimators=20)
         self.df_predict = pd.DataFrame(index=df_test.index)
 
     # 模型训练，输出训练集MSE
@@ -61,13 +59,14 @@ class Model:
     def __data_preprocess(self, df):
         gender_mapper = {'男': 1, '女': 0}
         df['性别'] = df['性别'].map(gender_mapper)
-        df['体检日期'] = pd.to_datetime(df['体检日期'], format="%d/%m/%Y")
-        df['体检日期'] = pd.to_datetime('1/1/2018', format="%d/%m/%Y") - df['体检日期']
-        df['体检日期'] = df['体检日期'].dt.days
 
         # 特征降维
         col_list = ["血小板体积分布宽度", "单核细胞%", "乙肝表面抗原", "白球比例",
-                    "乙肝e抗体", "乙肝e抗原", "乙肝表面抗体", "乙肝核心抗体"]
+                    "乙肝e抗体", "乙肝e抗原", "乙肝表面抗体", "乙肝核心抗体", "体检日期",
+                    "白蛋白", "嗜酸细胞%", "肌酐", "血小板比积", "红细胞平均血红蛋白浓度",
+                    "*总蛋白", "嗜碱细胞%", "血小板计数", "红细胞平均体积", "红细胞平均血红蛋白量",
+                    "红细胞体积分布宽度", "*球蛋白", "*碱性磷酸酶", "*r-谷氨酰基转换酶",
+                    "*丙氨酸氨基转换酶", "甘油三酯", "*天门冬氨酸氨基转换酶"]
 
         for col_name in col_list:
             self.__drop_col(df, col_name)
@@ -104,16 +103,6 @@ class Model:
     # 对DataFrame数据进行相关性分析,采用kendall相关系数
     def __corr_analysis(self, df):
         df.corr(method='kendall').to_csv("rgs_corr.csv")
-
-    def __fillna(self, df):
-        pass
-        # bins = [3.9, 6.1, 8.2, 10]
-        # df['血糖范围'] = pd.cut(df['血糖'], bins, labels=False)
-        # # 按label分类,利用均值填补空值
-        # for index in df.columns.values:
-        #     df[index] = df.groupby("血糖范围").transform(lambda x: x.fillna(x.mean()))
-        # self.__drop_col(df, "血糖范围")
-        # return df
 
 
 # 以下部分请勿改动！
